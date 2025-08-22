@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth Curvature Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #tilt-controls {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+            min-width: 200px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        
+        .control-value {
+            font-size: 12px;
+            color: #ccc;
+            text-align: center;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+            min-width: 250px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+        }
+        
+        .info-value {
+            color: #4CAF50;
+        }
+        
+        .instructions {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #ccc;
+            border-top: 1px solid #444;
+            padding-top: 10px;
+        }
+        
+        #location-buttons {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+        
+        .location-btn {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: 2px solid #4CAF50;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .location-btn:hover {
+            background: rgba(76, 175, 80, 0.8);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="info-panel">
+            <h3 style="margin-top: 0; color: #4CAF50;">Earth Curvature Demo</h3>
+            <div class="info-row">
+                <span class="info-label">Elevation:</span>
+                <span class="info-value" id="elevation">0 km</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"></span>
+                <span class="info-value" id="elevation-imperial" style="font-size: 12px; color: #999;">0 ft</span>
+            </div>
+            <div class="instructions">
+                <strong>Controls:</strong><br>
+                • Mouse: Drag to change viewing angle<br>
+                • Scroll: Change elevation<br>
+                • Right panel: Manual adjustments
+            </div>
+        </div>
+        
+        <div id="tilt-controls">
+            <h3 style="margin-top: 0; color: #4CAF50;">Camera Controls</h3>
+            
+            <div class="control-group">
+                <label>Horizontal Rotation:</label>
+                <input type="range" id="tilt-horizontal" min="0" max="360" step="1" value="0">
+                <div class="control-value" id="tilt-horizontal-value">0°</div>
+            </div>
+            
+            <div class="control-group">
+                <label>Elevation:</label>
+                <input type="range" id="elevation-control" min="0" max="1000000" step="0.1" value="2">
+                <div class="control-value" id="elevation-control-value">2 m</div>
+            </div>
+        </div>
+        
+        <div id="location-buttons">
+            <button class="location-btn" onclick="moveToLocation('person')">Person</button>
+            <button class="location-btn" onclick="moveToLocation('building')">One World Trade Center</button>
+            <button class="location-btn" onclick="moveToLocation('airplane')">Airplane</button>
+            <button class="location-btn" onclick="moveToLocation('privatejet')">Private Jet</button>
+            <button class="location-btn" onclick="moveToLocation('balloon')">Balloon</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Earth Curvature Demo - Simple Version
+        // JavaScript ES6+
+        // Description: Interactive 3D Earth with manual camera controls
+        // Status: Basic Earth with zoom and tilt controls
+        
+        // Global variables
+        let gScene, gCamera, gRenderer, gControls;
+        let gEarth;
+        let gEarthRadius = 6371000; // Earth radius in meters
+        let gCurrentElevation = 0;
+        let gCurrentTilt = 0;
+        
+        // Initialize the scene
+        function init() {
+            // Create scene
+            gScene = new THREE.Scene();
+            gScene.background = new THREE.Color(0x87CEEB); // Sky blue
+            
+            // Create camera
+            gCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, gEarthRadius * 20);
+            gCamera.position.set(10, gEarthRadius + 2, 0); // 2 meters high, 10 meters away horizontally
+            
+            // Create renderer
+            gRenderer = new THREE.WebGLRenderer({ antialias: true });
+            gRenderer.setSize(window.innerWidth, window.innerHeight);
+            gRenderer.shadowMap.enabled = true;
+            gRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(gRenderer.domElement);
+            
+            // Create controls
+            gControls = new THREE.OrbitControls(gCamera, gRenderer.domElement);
+            gControls.enableDamping = true;
+            gControls.dampingFactor = 0.05;
+            gControls.enablePan = false; // Disable panning - only allow rotation
+            gControls.enableZoom = false; // Disable default zoom - we'll handle elevation manually
+            gControls.minPolarAngle = 0; // Prevent looking too far up
+            gControls.maxPolarAngle = Math.PI; // Prevent looking too far down
+            
+            // Set initial target at same elevation as camera
+            gControls.target.set(0, gEarthRadius + 2, 0);
+            gControls.update(); // Apply initial camera settings
+            
+            // Add constraint to maintain elevation during rotation
+            gControls.addEventListener('change', constrainElevation);
+            
+            // Add event listeners
+            gControls.addEventListener('change', updateInfo);
+            window.addEventListener('resize', onWindowResize);
+            
+            // Add custom mouse wheel handler for elevation
+            gRenderer.domElement.addEventListener('wheel', onMouseWheelElevation, { passive: false });
+            
+            // Add manual control event listeners
+            setupManualControls();
+            
+            // Create Earth
+            createEarth();
+            
+            // Create person on Earth surface
+            createPerson();
+            
+            // Create One World Trade Center building
+            createOneWTC();
+            
+            // Create airplane above building
+            createAirplane();
+            
+            // Create private jet at higher altitude
+            createPrivateJet();
+            
+            // Create high-altitude balloon
+            createBalloon();
+            
+            // Add lighting
+            addLighting();
+            
+            // Start animation loop
+            animate();
+            
+            // Initial info update
+            updateInfo();
+        }
+        
+        // Create Earth
+        function createEarth() {
+            // Earth geometry
+            const earthGeometry = new THREE.SphereGeometry(gEarthRadius, 128, 128);
+            
+            // Earth material with realistic color and texture
+            const earthMaterial = new THREE.MeshLambertMaterial({
+                color: 0x4B7F52, // Earth green-brown
+                wireframe: false
+            });
+            
+            gEarth = new THREE.Mesh(earthGeometry, earthMaterial);
+            gEarth.receiveShadow = true;
+            gScene.add(gEarth);
+            
+            // Add subtle atmosphere glow
+            const atmosphereGeometry = new THREE.SphereGeometry(gEarthRadius + 5000, 64, 64);
+            const atmosphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x87CEEB,
+                transparent: true,
+                opacity: 0.1,
+                side: THREE.BackSide
+            });
+            const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+            gScene.add(atmosphere);
+        }
+        
+        // Create person on Earth surface
+        function createPerson() {
+            const personGroup = new THREE.Group();
+            
+            // Make person true to scale - 2 meters tall
+            const scale = 1;
+            
+            // Head (0.3m diameter, positioned at 1.85m height)
+            const headGeometry = new THREE.SphereGeometry(0.15 * scale, 16, 16);
+            const headMaterial = new THREE.MeshLambertMaterial({ color: 0xFFDBAC }); // Skin color
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 1.85 * scale;
+            head.castShadow = true;
+            personGroup.add(head);
+            
+            // Body (0.4m wide, 1.0m tall, positioned at 1.0m height)
+            const bodyGeometry = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, 1.0 * scale, 16);
+            const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x2196F3 }); // Blue shirt
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.0 * scale;
+            body.castShadow = true;
+            personGroup.add(body);
+            
+            // Arms
+            const armGeometry = new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 0.6 * scale, 12);
+            const armMaterial = new THREE.MeshLambertMaterial({ color: 0xFFDBAC }); // Skin color
+            
+            // Left arm
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-0.3 * scale, 1.2 * scale, 0);
+            leftArm.rotation.z = Math.PI / 6; // Slight angle
+            leftArm.castShadow = true;
+            personGroup.add(leftArm);
+            
+            // Right arm
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(0.3 * scale, 1.2 * scale, 0);
+            rightArm.rotation.z = -Math.PI / 6; // Slight angle
+            rightArm.castShadow = true;
+            personGroup.add(rightArm);
+            
+            // Legs
+            const legGeometry = new THREE.CylinderGeometry(0.08 * scale, 0.1 * scale, 0.9 * scale, 12);
+            const legMaterial = new THREE.MeshLambertMaterial({ color: 0x1976D2 }); // Dark blue pants
+            
+            // Left leg
+            const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+            leftLeg.position.set(-0.12 * scale, 0.45 * scale, 0);
+            leftLeg.castShadow = true;
+            personGroup.add(leftLeg);
+            
+            // Right leg
+            const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+            rightLeg.position.set(0.12 * scale, 0.45 * scale, 0);
+            rightLeg.castShadow = true;
+            personGroup.add(rightLeg);
+            
+            // Position person at the origin on Earth's surface
+            // Earth center is at (0, 0, 0), so person stands at (0, gEarthRadius, 0)
+            personGroup.position.set(0, gEarthRadius, 0);
+            
+            // Person faces along the X-axis (toward camera's general direction)
+            personGroup.lookAt(100, gEarthRadius, 0);
+            
+            gScene.add(personGroup);
+        }
+        
+        // Create One World Trade Center building
+        function createOneWTC() {
+            const buildingGroup = new THREE.Group();
+            
+            // One WTC specifications: 541m tall, ~63m x 63m base
+            const buildingHeight = 541; // meters
+            const buildingWidth = 63;   // meters
+            
+            // Foundation/Base
+            const baseGeometry = new THREE.BoxGeometry(buildingWidth + 10, 2, buildingWidth + 10);
+            const baseMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 }); // Dark gray
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 1; // 1m above ground
+            base.castShadow = true;
+            buildingGroup.add(base);
+            
+            // Main tower structure
+            const towerGeometry = new THREE.BoxGeometry(buildingWidth, buildingHeight - 20, buildingWidth);
+            const towerMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC }); // Light gray
+            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+            tower.position.y = (buildingHeight - 20) / 2 + 2; // Center vertically above base
+            tower.castShadow = true;
+            buildingGroup.add(tower);
+            
+            // Spire (top antenna structure)
+            const spireGeometry = new THREE.CylinderGeometry(2, 4, 20, 8);
+            const spireMaterial = new THREE.MeshLambertMaterial({ color: 0x999999 }); // Medium gray
+            const spire = new THREE.Mesh(spireGeometry, spireMaterial);
+            spire.position.y = buildingHeight - 10; // At the top
+            spire.castShadow = true;
+            buildingGroup.add(spire);
+            
+            // Position building next to the person at origin
+            // Place it 100 meters away from origin along Z-axis
+            buildingGroup.position.set(0, gEarthRadius, 100);
+            
+            // Building faces toward origin (toward the person)
+            buildingGroup.lookAt(0, gEarthRadius, 0);
+            
+            gScene.add(buildingGroup);
+        }
+        
+        // Create airplane at 35,000 feet
+        function createAirplane() {
+            const airplaneGroup = new THREE.Group();
+            
+            // Convert 35,000 feet to meters
+            const airplaneAltitude = 35000 * 0.3048; // 10,668 meters
+            
+            // Fuselage (main body) - oriented for side view
+            const fuselageGeometry = new THREE.CylinderGeometry(1.5, 2, 40, 16);
+            const fuselageMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // White
+            const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+            fuselage.rotation.z = Math.PI / 2; // Rotate to horizontal
+            fuselage.castShadow = true;
+            airplaneGroup.add(fuselage);
+            
+            // Wings (made wider)
+            const wingGeometry = new THREE.BoxGeometry(80, 1, 12); // Increased from 60 to 80
+            const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC }); // Light gray
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.y = 0;
+            wings.castShadow = true;
+            airplaneGroup.add(wings);
+            
+            // Tail (vertical stabilizer)
+            const tailGeometry = new THREE.BoxGeometry(3, 8, 1);
+            const tailMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC }); // Light gray
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(-18, 4, 0);
+            tail.castShadow = true;
+            airplaneGroup.add(tail);
+            
+            // Horizontal stabilizer
+            const stabilizerGeometry = new THREE.BoxGeometry(15, 0.5, 4);
+            const stabilizerMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC });
+            const stabilizer = new THREE.Mesh(stabilizerGeometry, stabilizerMaterial);
+            stabilizer.position.set(-18, 0, 0);
+            stabilizer.castShadow = true;
+            airplaneGroup.add(stabilizer);
+            
+            // Position airplane directly above the building at 35,000 feet
+            airplaneGroup.position.set(0, gEarthRadius + airplaneAltitude, 100);
+            
+            // Rotate airplane to show side profile (sideways to camera)
+            // No rotation needed - default orientation shows side view from camera position
+            
+            gScene.add(airplaneGroup);
+        }
+        
+        // Create private jet at 50,000 feet
+        function createPrivateJet() {
+            const jetGroup = new THREE.Group();
+            
+            // Convert 50,000 feet to meters
+            const jetAltitude = 50000 * 0.3048; // 15,240 meters
+            
+            // Fuselage (smaller than commercial plane)
+            const fuselageGeometry = new THREE.CylinderGeometry(0.8, 1.2, 20, 16);
+            const fuselageMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // White
+            const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+            fuselage.rotation.z = Math.PI / 2; // Rotate to horizontal
+            fuselage.castShadow = true;
+            jetGroup.add(fuselage);
+            
+            // Wings (smaller than commercial plane)
+            const wingGeometry = new THREE.BoxGeometry(30, 0.8, 6); // Much smaller than 80m commercial wings
+            const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC }); // Light gray
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.y = 0;
+            wings.castShadow = true;
+            jetGroup.add(wings);
+            
+            // Tail (vertical stabilizer - smaller)
+            const tailGeometry = new THREE.BoxGeometry(2, 5, 0.8);
+            const tailMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC }); // Light gray
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(-9, 2.5, 0);
+            tail.castShadow = true;
+            jetGroup.add(tail);
+            
+            // Horizontal stabilizer (smaller)
+            const stabilizerGeometry = new THREE.BoxGeometry(8, 0.4, 2.5);
+            const stabilizerMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC });
+            const stabilizer = new THREE.Mesh(stabilizerGeometry, stabilizerMaterial);
+            stabilizer.position.set(-9, 0, 0);
+            stabilizer.castShadow = true;
+            jetGroup.add(stabilizer);
+            
+            // Position private jet directly above the building at 50,000 feet
+            jetGroup.position.set(0, gEarthRadius + jetAltitude, 150); // Offset slightly from commercial plane
+            
+            // Rotate to show side profile (sideways to camera)
+            // No rotation needed - default orientation shows side view from camera position
+            
+            gScene.add(jetGroup);
+        }
+        
+        // Create high-altitude balloon at 120,000 feet
+        function createBalloon() {
+            const balloonGroup = new THREE.Group();
+            
+            // Convert 120,000 feet to meters
+            const balloonAltitude = 120000 * 0.3048; // 36,576 meters
+            
+            // Balloon (large sphere)
+            const balloonGeometry = new THREE.SphereGeometry(15, 32, 32); // Large balloon
+            const balloonMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0xFF6B6B, // Red color (like Red Bull)
+                transparent: true,
+                opacity: 0.8
+            });
+            const balloon = new THREE.Mesh(balloonGeometry, balloonMaterial);
+            balloon.position.y = 25; // Position balloon above capsule
+            balloon.castShadow = true;
+            balloonGroup.add(balloon);
+            
+            // Suspension cables (thin lines connecting balloon to capsule)
+            const cableGeometry = new THREE.CylinderGeometry(0.1, 0.1, 20, 8);
+            const cableMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 }); // Dark gray
+            
+            // Multiple cables for realism
+            for (let i = 0; i < 4; i++) {
+                const cable = new THREE.Mesh(cableGeometry, cableMaterial);
+                const angle = (i * Math.PI) / 2;
+                cable.position.set(Math.cos(angle) * 3, 12.5, Math.sin(angle) * 3);
+                cable.castShadow = true;
+                balloonGroup.add(cable);
+            }
+            
+            // Capsule (small box)
+            const capsuleGeometry = new THREE.BoxGeometry(3, 2.5, 3);
+            const capsuleMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // White
+            const capsule = new THREE.Mesh(capsuleGeometry, capsuleMaterial);
+            capsule.position.y = 0; // At bottom of balloon group
+            capsule.castShadow = true;
+            balloonGroup.add(capsule);
+            
+            // Capsule window
+            const windowGeometry = new THREE.BoxGeometry(2, 1.5, 0.1);
+            const windowMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0x87CEEB, // Sky blue
+                transparent: true,
+                opacity: 0.7
+            });
+            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+            window.position.set(0, 0.5, 1.55); // Front of capsule
+            balloonGroup.add(window);
+            
+            // Position balloon system at 120,000 feet
+            balloonGroup.position.set(0, gEarthRadius + balloonAltitude, 200); // Offset from other aircraft
+            
+            gScene.add(balloonGroup);
+        }
+        
+        // Add lighting
+        function addLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            gScene.add(ambientLight);
+            
+            // Directional light (sun)
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1);
+            directionalLight.position.set(gEarthRadius * 2, gEarthRadius * 2, gEarthRadius);
+            directionalLight.castShadow = true;
+            gScene.add(directionalLight);
+        }
+        
+        // Constrain camera to maintain current elevation during rotation
+        function constrainElevation() {
+            const currentElevation = parseFloat(document.getElementById('elevation-control').value);
+            
+            // Keep camera at the specified elevation
+            gCamera.position.y = gEarthRadius + currentElevation;
+            gControls.target.y = gEarthRadius + currentElevation;
+        }
+        
+        // Handle mouse wheel elevation changes
+        function onMouseWheelElevation(event) {
+            event.preventDefault();
+            
+            const delta = event.deltaY;
+            const currentElevation = gCamera.position.y - gEarthRadius;
+            
+            // Logarithmic scaling: slow at low elevations, fast at high elevations
+            // Base change rate starts at 0.5m at ground level
+            let elevationChange;
+            if (currentElevation < 10) {
+                // 0-10m: 0.1m per wheel unit (gentle for ground level)
+                elevationChange = delta * 0.1;
+            } else if (currentElevation < 100) {
+                // 10-100m: 1-3m per tick (gentle increase)
+                elevationChange = delta * (1 + (currentElevation - 10) / 90 * 2);
+            } else if (currentElevation < 600) {
+                // 100-600m: 3-5m per tick (building height range)
+                elevationChange = delta * (3 + (currentElevation - 100) / 500 * 2);
+            } else if (currentElevation < 1000) {
+                // 600m-1km: 5-10m per tick
+                elevationChange = delta * (5 + (currentElevation - 600) / 400 * 5);
+            } else if (currentElevation < 10000) {
+                // 1-10km: 10-50m per tick
+                elevationChange = delta * (10 + (currentElevation - 1000) / 9000 * 40);
+            } else if (currentElevation < 50000) {
+                // 10-50km: 50-200m per tick
+                elevationChange = delta * (50 + (currentElevation - 10000) / 40000 * 150);
+            } else if (currentElevation < 100000) {
+                // 50-100km: 200-500m per tick
+                elevationChange = delta * (200 + (currentElevation - 50000) / 50000 * 300);
+            } else if (currentElevation < 500000) {
+                // 100-500km: 500-2000m per tick (ISS range)
+                elevationChange = delta * (500 + (currentElevation - 100000) / 400000 * 1500);
+            } else {
+                // 500km+: 2000-5000m per tick (deep space view)
+                elevationChange = delta * (2000 + Math.min((currentElevation - 500000) / 500000 * 3000, 3000));
+            }
+            
+            // Calculate new elevation (minimum 0.1 meters, maximum 1000km)
+            const newElevation = Math.max(0.1, Math.min(1000000, currentElevation + elevationChange));
+            
+            // Update camera Y position only, keeping X and Z the same
+            gCamera.position.y = gEarthRadius + newElevation;
+            
+            // Update target Y position to maintain viewing angle
+            gControls.target.y = gEarthRadius + newElevation;
+            
+            // Update elevation slider
+            document.getElementById('elevation-control').value = newElevation;
+            document.getElementById('elevation-control-value').textContent = newElevation < 1000 ? newElevation.toFixed(1) + ' m' : (newElevation / 1000).toFixed(1) + ' km';
+            
+            gControls.update();
+            updateInfo();
+        }
+        
+        // Move to predefined locations with smooth transition
+        function moveToLocation(location) {
+            let targetElevation, targetRotation, targetCameraPosition, targetLookAt;
+            
+            switch(location) {
+                case 'person':
+                    // Match the default view exactly: 10m away from person, 2m high
+                    targetElevation = 2;
+                    targetRotation = 0;
+                    targetCameraPosition = { x: 10, y: gEarthRadius + 2, z: 0 };
+                    targetLookAt = { x: 0, y: gEarthRadius + 2, z: 0 };
+                    break;
+                case 'building':
+                    targetElevation = 532;
+                    targetRotation = 180;
+                    // Use standard positioning for building view
+                    targetCameraPosition = null; // Will use updateCameraFromControls()
+                    break;
+                case 'airplane':
+                    targetElevation = 10670; // 35,000 feet + 2 meters
+                    targetRotation = 180;
+                    // Use standard positioning for airplane view
+                    targetCameraPosition = null; // Will use updateCameraFromControls()
+                    break;
+                case 'privatejet':
+                    targetElevation = 15242; // 50,000 feet + 2 meters
+                    targetRotation = 180;
+                    // Use standard positioning for private jet view
+                    targetCameraPosition = null; // Will use updateCameraFromControls()
+                    break;
+                case 'balloon':
+                    targetElevation = 36578; // 120,000 feet + 2 meters
+                    targetRotation = 180;
+                    // Use standard positioning for balloon view
+                    targetCameraPosition = null; // Will use updateCameraFromControls()
+                    break;
+                default:
+                    return;
+            }
+            
+            // Get current values
+            const startElevation = parseFloat(document.getElementById('elevation-control').value);
+            const startRotation = parseFloat(document.getElementById('tilt-horizontal').value);
+            const startCameraPosition = gCamera.position.clone();
+            const startLookAt = gControls.target.clone();
+            
+            // Handle rotation wrapping (shortest path)
+            let rotationDiff = targetRotation - startRotation;
+            if (rotationDiff > 180) rotationDiff -= 360;
+            if (rotationDiff < -180) rotationDiff += 360;
+            const endRotation = startRotation + rotationDiff;
+            
+            // Animation parameters
+            const duration = 2000; // 2 seconds
+            const startTime = Date.now();
+            
+            function animateTransition() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Easing function (ease-out)
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Interpolate values
+                const currentElevation = startElevation + (targetElevation - startElevation) * easeProgress;
+                const currentRotation = startRotation + (endRotation - startRotation) * easeProgress;
+                
+                // Update sliders and display
+                document.getElementById('elevation-control').value = currentElevation;
+                document.getElementById('elevation-control-value').textContent = 
+                    currentElevation < 1000 ? currentElevation.toFixed(1) + ' m' : (currentElevation / 1000).toFixed(1) + ' km';
+                
+                // Update imperial units during animation
+                const currentElevationFeet = currentElevation * 3.28084;
+                const currentElevationMiles = currentElevationFeet / 5280;
+                if (currentElevationFeet < 5280) {
+                    document.getElementById('elevation-imperial').textContent = `${currentElevationFeet.toFixed(0)} ft`;
+                } else {
+                    document.getElementById('elevation-imperial').textContent = `${currentElevationMiles.toFixed(1)} mi`;
+                }
+                
+                let normalizedRotation = currentRotation % 360;
+                if (normalizedRotation < 0) normalizedRotation += 360;
+                document.getElementById('tilt-horizontal').value = normalizedRotation;
+                document.getElementById('tilt-horizontal-value').textContent = normalizedRotation.toFixed(0) + '°';
+                
+                // Update camera position
+                if (targetCameraPosition) {
+                    // Special positioning for person view
+                    const currentCameraX = startCameraPosition.x + (targetCameraPosition.x - startCameraPosition.x) * easeProgress;
+                    const currentCameraY = startCameraPosition.y + (targetCameraPosition.y - startCameraPosition.y) * easeProgress;
+                    const currentCameraZ = startCameraPosition.z + (targetCameraPosition.z - startCameraPosition.z) * easeProgress;
+                    
+                    const currentLookAtX = startLookAt.x + (targetLookAt.x - startLookAt.x) * easeProgress;
+                    const currentLookAtY = startLookAt.y + (targetLookAt.y - startLookAt.y) * easeProgress;
+                    const currentLookAtZ = startLookAt.z + (targetLookAt.z - startLookAt.z) * easeProgress;
+                    
+                    gCamera.position.set(currentCameraX, currentCameraY, currentCameraZ);
+                    gControls.target.set(currentLookAtX, currentLookAtY, currentLookAtZ);
+                    gControls.update();
+                } else {
+                    // Standard positioning
+                    updateCameraFromControls();
+                }
+                
+                updateInfo();
+                
+                // Continue animation or finish
+                if (progress < 1) {
+                    requestAnimationFrame(animateTransition);
+                } else {
+                    // Ensure final values are exact
+                    document.getElementById('elevation-control').value = targetElevation;
+                    document.getElementById('elevation-control-value').textContent = 
+                        targetElevation < 1000 ? targetElevation + ' m' : (targetElevation / 1000).toFixed(1) + ' km';
+                    document.getElementById('tilt-horizontal').value = targetRotation;
+                    document.getElementById('tilt-horizontal-value').textContent = targetRotation + '°';
+                    
+                    if (targetCameraPosition) {
+                        gCamera.position.set(targetCameraPosition.x, targetCameraPosition.y, targetCameraPosition.z);
+                        gControls.target.set(targetLookAt.x, targetLookAt.y, targetLookAt.z);
+                        gControls.update();
+                    } else {
+                        updateCameraFromControls();
+                    }
+                    updateInfo();
+                }
+            }
+            
+            // Start animation
+            animateTransition();
+        }
+        
+        // Setup manual controls
+        function setupManualControls() {
+            const horizontalRotation = document.getElementById('tilt-horizontal');
+            const elevationControl = document.getElementById('elevation-control');
+            
+            // Horizontal rotation control
+            horizontalRotation.addEventListener('input', function() {
+                const rotationValue = parseFloat(this.value);
+                document.getElementById('tilt-horizontal-value').textContent = rotationValue + '°';
+                updateCameraFromControls();
+            });
+            
+            // Elevation control
+            elevationControl.addEventListener('input', function() {
+                const elevationValue = parseFloat(this.value);
+                document.getElementById('elevation-control-value').textContent = elevationValue < 1000 ? elevationValue + ' m' : (elevationValue / 1000).toFixed(1) + ' km';
+                updateCameraFromControls();
+            });
+        }
+        
+        // Update camera position from manual controls
+        function updateCameraFromControls() {
+            const rotationValue = parseFloat(document.getElementById('tilt-horizontal').value);
+            const elevationValue = parseFloat(document.getElementById('elevation-control').value);
+            
+            const horizontalAngle = rotationValue * (Math.PI / 180);
+            const distance = 50; // Fixed viewing distance from target
+            
+            // Calculate camera position at specified elevation (horizontal view)
+            const x = distance * Math.sin(horizontalAngle);
+            const y = gEarthRadius + elevationValue;
+            const z = distance * Math.cos(horizontalAngle);
+            
+            // Position camera and target at the same elevation
+            gCamera.position.set(x, y, z);
+            gControls.target.set(0, gEarthRadius + elevationValue, 0);
+            gControls.update();
+            updateInfo();
+        }
+        
+        // Update info panel
+        function updateInfo() {
+            const elevation = gCamera.position.y - gEarthRadius;
+            
+            gCurrentElevation = elevation;
+            
+            // Convert to imperial units
+            const elevationFeet = elevation * 3.28084; // meters to feet
+            const elevationMiles = elevationFeet / 5280; // feet to miles
+            
+            // Update metric display
+            if (elevation < 1000) {
+                document.getElementById('elevation').textContent = `${elevation.toFixed(1)} m`;
+            } else {
+                document.getElementById('elevation').textContent = `${(elevation / 1000).toFixed(1)} km`;
+            }
+            
+            // Update imperial display
+            if (elevationFeet < 5280) {
+                document.getElementById('elevation-imperial').textContent = `${elevationFeet.toFixed(0)} ft`;
+            } else {
+                document.getElementById('elevation-imperial').textContent = `${elevationMiles.toFixed(1)} mi`;
+            }
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            gCamera.aspect = window.innerWidth / window.innerHeight;
+            gCamera.updateProjectionMatrix();
+            gRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            gControls.update();
+            gRenderer.render(gScene, gCamera);
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
